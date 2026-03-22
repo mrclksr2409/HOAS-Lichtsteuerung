@@ -1,0 +1,75 @@
+alias: Lichtsteuerung
+description: ""
+triggers:
+  - type: motion
+    device_id: e007b94fc18885a23ae3a2beaa33e236
+    entity_id: binary_sensor.buero_praesenzmelder_motion
+    domain: binary_sensor
+    trigger: device
+  - type: no_motion
+    device_id: e007b94fc18885a23ae3a2beaa33e236
+    entity_id: binary_sensor.buero_praesenzmelder_motion
+    domain: binary_sensor
+    for:
+      hours: 0
+      minutes: 5
+      seconds: 0
+    trigger: device
+  - type: illuminance
+    device_id: e007b94fc18885a23ae3a2beaa33e236
+    entity_id: sensor.buero_praesenzmelder_illumination
+    domain: sensor
+    below: 10
+    trigger: device
+conditions:
+  - condition: and
+    conditions:
+      - condition: state
+        entity_id: input_boolean.blocker
+        state: "off"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_text.buro_scene
+            state: 0cbec4e8-d064-4457-986a-fe6078a63f39
+          - condition: state
+            entity_id: light.buro
+            state: "off"
+actions:
+  - choose:
+      - conditions:
+          - condition: and
+            conditions:
+              - type: is_illuminance
+                condition: device
+                device_id: e007b94fc18885a23ae3a2beaa33e236
+                entity_id: sensor.buero_praesenzmelder_illumination
+                domain: sensor
+                below: 10
+              - type: is_motion
+                condition: device
+                device_id: e007b94fc18885a23ae3a2beaa33e236
+                entity_id: binary_sensor.buero_praesenzmelder_motion
+                domain: binary_sensor
+        sequence:
+          - action: script.1713866442195
+            metadata: {}
+            data:
+              preset_id: 0cbec4e8-d064-4457-986a-fe6078a63f39
+              transition: 1
+              entity_id:
+                - light.buro
+      - conditions:
+          - type: is_no_motion
+            condition: device
+            device_id: e007b94fc18885a23ae3a2beaa33e236
+            entity_id: binary_sensor.buero_praesenzmelder_motion
+            domain: binary_sensor
+        sequence:
+          - action: light.turn_off
+            data:
+              transition: 1
+            target:
+              entity_id: light.buro
+    default: []
+mode: single
