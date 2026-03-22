@@ -1,0 +1,152 @@
+blueprint:
+  name: Lichtsteuerung
+  description: >
+    Bewegungsabhängige Lichtsteuerung mit Helligkeitsschwelle.
+    Schaltet das Licht ein, wenn Bewegung erkannt wird und die Helligkeit unter
+    einen konfigurierbaren Schwellenwert fällt. Schaltet es automatisch aus,
+    wenn für eine einstellbare Dauer keine Bewegung mehr erkannt wird.
+  domain: automation
+  input:
+    motion_sensor:
+      name: Bewegungssensor
+      description: Binärsensor des Präsenzmelders (device_class motion)
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+
+    illuminance_sensor:
+      name: Helligkeitssensor
+      description: Sensor für die Beleuchtungsstärke in Lux
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+
+    light_entity:
+      name: Licht
+      description: Das zu steuernde Licht
+      selector:
+        entity:
+          domain: light
+
+    blocker:
+      name: Blocker
+      description: Input Boolean, der die Automation blockiert (muss ausgeschaltet sein)
+      selector:
+        entity:
+          domain: input_boolean
+
+    scene_input:
+      name: Aktive-Szenen-Eingabe
+      description: Input Text, der die UUID der aktiven Szene enthält
+      selector:
+        entity:
+          domain: input_text
+
+    scene_id:
+      name: Szenen-ID
+      description: UUID der einzuschaltenden Szene (muss mit dem Wert in der Szenen-Eingabe übereinstimmen)
+      selector:
+        text:
+
+    scene_script:
+      name: Szenen-Skript
+      description: Skript zum Aktivieren der Szene (wird mit preset_id, transition und entity_id aufgerufen)
+      selector:
+        entity:
+          domain: script
+
+    no_motion_wait:
+      name: Wartezeit ohne Bewegung
+      description: Dauer in Minuten, nach der das Licht bei ausbleibender Bewegung ausgeschaltet wird
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+
+    illuminance_threshold:
+      name: Helligkeitsschwelle
+      description: Unter diesem Lux-Wert wird das Licht eingeschaltet
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 1000
+          unit_of_measurement: lx
+
+    transition:
+      name: Übergangszeit
+      description: Übergangszeit in Sekunden beim Ein- und Ausschalten
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          unit_of_measurement: s
+
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "on"
+
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for:
+      minutes: !input no_motion_wait
+
+  - trigger: numeric_state
+    entity_id: !input illuminance_sensor
+    below: !input illuminance_threshold
+
+conditions:
+  - condition: and
+    conditions:
+      - condition: state
+        entity_id: !input blocker
+        state: "off"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: !input scene_input
+            state: !input scene_id
+          - condition: state
+            entity_id: !input light_entity
+            state: "off"
+
+actions:
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: !input illuminance_sensor
+            below: !input illuminance_threshold
+          - condition: state
+            entity_id: !input motion_sensor
+            state: "on"
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: !input scene_script
+            data:
+              variables:
+                preset_id: !input scene_id
+                transition: !input transition
+                entity_id: !input light_entity
+
+      - conditions:
+          - condition: state
+            entity_id: !input motion_sensor
+            state: "off"
+        sequence:
+          - action: light.turn_off
+            data:
+              transition: !input transition
+            target:
+              entity_id: !input light_entity
+
+    default: []
+
+mode: single
